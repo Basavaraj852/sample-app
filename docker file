@@ -1,0 +1,8 @@
+FROM python:3.9
+WORKDIR /app
+COPY . /app
+RUN pip install -r requirements.txt
+ENV DB_HOST=localhost \
+    DB_PORT=5432
+CMD ["python", "app.py"]
+docker build -t your_image_name .
