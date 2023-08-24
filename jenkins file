@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+    tools{
+         jdk 'jdk11'
+         maven 'maven'
+     }
+     environment{
+        SCANNER_HOME= tool 'sonar-scanner'
+    }
+    stages {
+        stage('Git checkout') {
+            steps {
+                git branch: 'main', changelog: false, credentialsId: '8c42d9f8-672f-47d2-b490-3ba6517b072c', poll: false, url: 'https://github.com/Basavaraj852/Shopping-Cart.git'
+            }
+        }
+        stage('compile') {
+            steps {
+                sh "mvn clean compile"
+            }
+        }
+        stage('OWASP Scan') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ ', odcInstallation: 'DP'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+        stage('Sonarqube') {
+            steps {
+                withSonarQubeEnv('sonar-server'){
+                   sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Shopping-Cart \
+                   -Dsonar.java.binaries=. \
+                   -Dsonar.projectKey=DevopsCICD '''
+               }
+            }
+        }
+        stage('Build') {
+            steps {
+                sh "mvn clean package -DskipTests=true"
+            }
+        }
+        stage('Docker Build & push') {
+            steps {
+                script{
+                    withDockerRegistry(credentialsId: '3bc75e56-deb9-4608-9aa0-446a4428fe07', toolname: 'docker')  {
+                        
+                        sh "docker build -t shopping-cart -f docker/Dockerfile ."
+                        sh "docker tag  shopping-cart basavaraj852/shopping-cart:latest"
+                        sh "docker push basavaraj852/shopping-cart:latest"
+                    }
+                }
+            }
+        }
+        stage('Deploy') {
+            steps {
+                script{
+                    withDockerRegistry(credentialsId: '3bc75e56-deb9-4608-9aa0-446a4428fe07', toolname: 'docker')  {
+                        
+                        sh "docker run -d --name sonar-shop -p 8070:8070 basavaraj852/shopping-cart:latest"
+                        
+                    }
+                }
+            }
+        }
+    }
+}
